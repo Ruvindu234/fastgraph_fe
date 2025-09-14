@@ -53,25 +53,54 @@ export function useAutoOrchestrate({
   useEffect(() => {
     const autoOrchestrateFirstWorkflow = async () => {
       // Prevent multiple executions in development due to React strict mode
-    
+      if (hasAutoOrchestrated.current) {
+        console.log('🚫 Auto orchestrate already executed, skipping...');
+        return;
+      }
      
       if (workflows.length > 0) {
- 
-        console.log("iii")
-        const firstWorkflowDescription = workflows[0]?.description;
+        const firstWorkflow = workflows[0];
+        
+        // 🚫 CRITICAL: DO NOT auto-orchestrate existing workflows loaded from API
+        // Only auto-orchestrate brand new workflows created by user
+        
+        // Check 1: Skip if workflow has nodes (loaded from API)
+        if (firstWorkflow?.nodes && firstWorkflow.nodes.length > 0) {
+          console.log('🚫 SKIPPING AUTO-ORCHESTRATION: Existing workflow with nodes (from API data)');
+          return;
+        }
+        
+        // Check 2: Skip if workflow has a dataId (from API)
+        if (firstWorkflow?.id && (firstWorkflow.id.includes('-') || firstWorkflow.id.length > 15)) {
+          console.log('🚫 SKIPPING AUTO-ORCHESTRATION: Existing workflow with dataId (from API)');
+          return;
+        }
+        
+        // Check 3: Skip if workflow status indicates it's already processed
+        if (firstWorkflow?.status && firstWorkflow.status !== 'draft') {
+          console.log('🚫 SKIPPING AUTO-ORCHESTRATION: Workflow already processed (status: ' + firstWorkflow.status + ')');
+          return;
+        }
+        
+        // Check 4: Skip if workflow description contains "Type:" (indicates it's from API)
+        if (firstWorkflow?.description && firstWorkflow.description.includes('Type:')) {
+          console.log('🚫 SKIPPING AUTO-ORCHESTRATION: Workflow description indicates API origin');
+          return;
+        }
+
+        console.log("🎯 AUTO-ORCHESTRATING NEW WORKFLOW (user created)")
+        const firstWorkflowDescription = firstWorkflow?.description;
         if (firstWorkflowDescription) {
           console.log('Auto orchestrating with command:', firstWorkflowDescription);
           try {
-                        // Using hardcoded example for now - replace with actual API call when ready
-              const result = await autoOrchestrate({ command: firstWorkflowDescription, response_mode: 'full' }).unwrap();
-             //const result = mockAutoOrchestrateResult;
+            // Using hardcoded example for now - replace with actual API call when ready
+            const result = await autoOrchestrate({ command: firstWorkflowDescription, response_mode: 'full' }).unwrap();
+            //const result = mockAutoOrchestrateResult;
 
             // Process agents and connections
             const { agents: processedAgents, connections: processedConnections, finalData: processedFinalData, finalizedResult: processedFinalizedResult, executionResults: processedExecutionResults } = 
               processAgentsFromResponse(result);
            
-           
-            
             setAgents(processedAgents);
             setConnections(processedConnections);
             setFinalData(processedFinalData);
@@ -80,16 +109,13 @@ export function useAutoOrchestrate({
             onAgentsProcessed(processedAgents, processedConnections, processedFinalData);
 
             // Save the auto orchestrate result using useInstallDataMutation
-
             try {
               const saveResult = await installData({
-                dataName: workflows[0].name,
+                dataName: firstWorkflow.name || 'Auto Generated Workflow',
                 description: firstWorkflowDescription,
-                status:workflows[0].status,
                 dataType: 'json',
                 dataContent: {
                   autoOrchestrateResult: result,
-                 
                 },
                 overwrite: false
               }).unwrap();
@@ -107,7 +133,7 @@ export function useAutoOrchestrate({
         }
       }
     };
- 
+
     autoOrchestrateFirstWorkflow();
   }, [workflows.length, autoOrchestrate, onAgentsProcessed]);
  

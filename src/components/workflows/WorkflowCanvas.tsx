@@ -135,7 +135,13 @@ function WorkflowCanvasInner({
 
   // Initialize nodes based on agents and edges based on connections
   useEffect(() => {
-    if (agents) {
+    console.log('🎨 CANVAS: useEffect triggered - agents changed');
+    console.log('🎨 CANVAS: Received agents prop:', agents);
+    console.log('🎨 CANVAS: Agents keys:', agents ? Object.keys(agents) : 'null');
+    console.log('🎨 CANVAS: Agents count:', agents ? Object.keys(agents).length : 0);
+    
+    if (agents && Object.keys(agents).length > 0) {
+      console.log('🎨 CANVAS: Creating agent nodes for agents:', Object.keys(agents));
       const agentNodes: Node[] = Object.entries(agents).map(([name, agent], index) => ({
         id: `agent-${name}`,
         position: { 
@@ -174,11 +180,13 @@ function WorkflowCanvasInner({
       };
       
       const allNodes = [...agentNodes, endNode];
-      console.log('Setting agent nodes with end node:', allNodes);
+      console.log('🎨 CANVAS: Setting', allNodes.length, 'nodes (including end node)');
+      console.log('🎨 CANVAS: Node IDs:', allNodes.map(n => n.id));
       setNodes(allNodes);
+      console.log('🎨 CANVAS: ✅ Nodes set successfully');
 
       // Create connections based on agent input/output relationships
-      if (agents && Object.keys(agents).length === 1) {
+      if (Object.keys(agents).length === 1) {
         // Single agent case - connect directly to end node
         const [agentName] = Object.keys(agents);
         const singleAgentConnection: Edge = {
@@ -361,6 +369,10 @@ function WorkflowCanvasInner({
           setEdges([testConnection, endConnection]);
         }
       }
+    } else {
+      console.log('🎨 CANVAS: ❌ No agents or empty agents - clearing nodes');
+      setNodes([]);
+      setEdges([]);
     }
     
     // Also handle explicit connections if provided (but still add end node connections)
