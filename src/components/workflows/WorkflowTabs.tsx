@@ -53,7 +53,9 @@ export function WorkflowTabs({
             onClick={() => onSelectWorkflow(workflow.id)}
           >
             <StatusIndicator status={workflow.status} />
-            <span className="text-sm font-medium">{workflow.name}</span>
+            <span className="text-sm font-medium truncate max-w-[200px]" title={workflow.name}>
+              {workflow.name}
+            </span>
             {/* <button
               onClick={(e) => {
                 e.stopPropagation();

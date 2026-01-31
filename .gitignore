@@ -72,3 +72,6 @@ test-brave-*.sh
 
 # Documentation files
 *.md
+
+# Personal notes
+ruvi.txt

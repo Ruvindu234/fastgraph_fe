@@ -283,7 +283,7 @@ export function useAutoOrchestrate({
         try {
                 console.log('💾 Attempting to save auto orchestrate data...', {
                   userId: user.id,
-                  dataName: `Auto Orchestrate - ${command}`,
+                  dataName: command.length > 50 ? `${command.substring(0, 47)}...` : command,
                   dataType: 'json',
                   numberOfAgents: Object.keys(processedAgents).length,
                   processedAgentsKeys: Object.keys(processedAgents),
@@ -356,9 +356,14 @@ export function useAutoOrchestrate({
             hasMLanguageSpec: !!dataContent?.rawData?.m_language_spec
           });
 
+          // Truncate command for a reasonable workflow name (max 50 chars)
+          const truncatedName = command.length > 50 
+            ? `${command.substring(0, 47)}...` 
+            : command;
+          
           const saveResult = await installData({
-            dataName: `${command}`,
-            description: `Auto orchestrate result for: ${command}`,
+            dataName: truncatedName,
+            description: command,
             dataType: 'json',
             dataContent: dataContent,
             numberOfAgents: numberOfAgents,
