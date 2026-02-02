@@ -1,0 +1,320 @@
+agent TripGuardianV3 {
+  meta {
+    name: "TripGuardianV3"
+    capabilities: ["trip-guardian", "weather", "safety"]
+    version: "3.0"
+    description: "Travel companion focused on safe, verifiable guidance"
+    system_prompt: """You are the "Trip Guardian & Tour Planner". Your goal is to be a helpful, fun, and protective travel companion.
+
+CORE PHILOSOPHY (The "Safe-Guide" Approach):
+1. **BE A GUIDE**: Suggest itineraries, food, and venues when asked.
+2. **BE A GUARDIAN**: Every recommendation MUST include a contextual safety tip.
+
+SAFETY RAILS:
+1. OFF-LIMITS: Medical/Legal advice, Violence/Hate speech.
+2. PERSONA: Enthusiastic but **CONCISE**. Save tokens.
+
+INSTRUCTIONS:
+1. Analyze conversation using Time/Location context.
+2. EXTRACT new details into 'updates' object.
+3. "Budget" is OPTIONAL. If user says "none" or "no", set it to "Standard".
+4. If Destination and Duration/Date are known -> ACTION: RUN_AGENT.
+5. DO NOT ask for confirmation.
+6. If user asks for recommendations (and details missing) -> ACTION: ASK_QUESTION
+
+RESPONSE MUST BE VALID JSON ONLY."""
+    welcome_message: "Hi! Share your trip details and I'll help with safety, logistics, and culture."
+    extract_variables: ["Destination", "StartDate", "Duration", "Budget"]
+    guardrails: {
+      max_tokens_per_request: 4000
+      max_requests_per_hour: 100
+      safety_rules: [
+        "NEVER provide medical or legal advice",
+        "NEVER prescribe medications or treatments",
+        "NEVER make financial investment recommendations"
+      ]
+      redirect_guidance: """
+        When asked for medical, legal, or investment advice:
+        - Acknowledge the concern empathetically
+        - Explain you cannot provide that advice
+        - Recommend consulting a qualified professional
+      """
+      required_disclaimers: [
+        "I am an AI travel assistant and cannot provide medical, legal, or investment advice."
+      ]
+      prohibited_topics: ["medical diagnosis", "legal interpretation", "investment advice"]
+    }
+  }
+
+  // v3 goal: ZERO HALLUCINATION - ask for missing data instead of inventing it
+  // Strict rule: if data is not from a tool or user, explicitly state "MISSING" and ask
+
+  schedule {
+    interval: "30m"
+    mode: "proactive"
+  }
+
+  nodes {
+    // 0. The Chronometer (Time Awareness)
+    http_request getDate {
+      url: "https://timeapi.io/api/Time/current/zone?timeZone=Asia/Colombo"
+      method: "GET"
+      timeout: 30
+      optional: "true"
+    }
+
+    // 1. Extract what the user provided + identify what's MISSING
+    llm extractDetails {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Extract trip details from: '${input}'.
+
+Output format:
+- Destination: [city name or 'MISSING']
+- Duration: [nights/days or 'MISSING']
+- Start Date: [specific date or 'MISSING']
+- End Date: [specific date or 'MISSING']
+- Specific venues/events: [list or 'MISSING']
+- Budget: [amount or 'MISSING']
+- Interests: [list or 'MISSING']
+
+CRITICAL RULE: If the user did NOT provide a specific piece of information, write 'MISSING' for that field. DO NOT guess or infer dates, times, or other specifics."
+    }
+
+    // 2. Extract Destination City
+    llm extractCity {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Extract just the main destination city name from: '${input}'.
+Return ONLY the city name (e.g., 'Delhi'). If no city is mentioned, return 'MISSING'."
+    }
+
+    // 3. Sky Watch (Direct Fetch) - only if city is known
+    http_request checkWeather {
+      url: "https://wttr.in/${extractCity_output}?format=3"
+      method: "GET"
+      timeout: 30
+      optional: "true"
+    }
+
+    // 4. Logistical Validation - provide timing warnings based on available data
+    llm knowledgeCheck {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+You are a Logistical Validator for ${extractCity_output}.
+User trip details: ${extractDetails_output}
+
+Check if the destination is valid:
+- If '${extractCity_output}' is 'MISSING' or 'unknown', output: 'Cannot provide logistics advice without a destination.'
+
+If destination is valid, provide timing warnings and logistics advice based on the information available:
+- If start date is provided: Check for holidays, peak seasons, closure periods
+- If venues are provided: Provide timing advice (best time to visit, avoid crowds)
+- If arrival/departure times are provided: Advise on transport connections, rush hours
+
+IMPORTANT: Work with whatever information is available. If some details are missing, provide general logistics advice for the city.
+
+CRITICAL RULE: DO NOT invent specific opening hours, closure days, or travel times. Only provide validated, well-known information."
+    }
+
+    // 5. Real Review Analysis (Google Places)
+    http_request fetchReviews {
+      url: "https://places.googleapis.com/v1/places:searchText"
+      method: "POST"
+      headers: {
+        "Content-Type": "application/json"
+        "X-Goog-Api-Key": "${env.GOOGLE_MAPS_KEY}"
+        "X-Goog-FieldMask": "places.displayName,places.rating,places.reviews"
+      }
+      body: "{\"textQuery\": \"Attractions in ${extractCity_output}\"}"
+      timeout: 30
+      optional: "true"
+    }
+
+    // 6. Review Summarizer - provide fallback tips if live data missing
+    llm reviewSummarizer {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Review Data Analysis for ${extractCity_output}.
+
+Review data: ${fetchReviews_output}
+User trip: ${input}
+
+If the destination is missing/unknown, briefly ask for the city and stop.
+
+If reviews are available:
+- Extract Insider Tips (specific, actionable)
+- Hidden Warnings (complaints, issues)
+- Real Vibe (touristy vs authentic)
+
+If reviews are not available or API fails:
+- Do NOT output 'MISSING'; instead, provide general, safe, non-invented traveler tips for the city (common well-known highlights, neighborhoods, and caution areas if broadly known).
+- Keep it concise and clearly note: 'No live reviews fetched; providing general guidance.'"
+    }
+
+    // 7. Safety Briefing - provide general safety if live data missing
+    llm newsAlert {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Safety Briefing for ${extractCity_output}.
+User trip: ${input}
+Extracted details: ${extractDetails_output}
+
+If destination is missing/unknown: briefly ask for the city and stop.
+
+If destination is known:
+1. State: 'No verified live news data available in this run (as of execution time).'
+2. Provide common, well-known safety risks for ${extractCity_output}.
+3. Include emergency numbers (police, ambulance).
+4. Provide general transport safety tips.
+5. If specific neighborhoods/dates would improve accuracy, note that briefly without blocking the output.
+
+OUTPUT FORMAT:
+Use simple markdown with complete sentences:
+- Use bullet points (- item)
+- Use bold for emphasis (**text**)
+- NEVER use pipe tables (| col | col |)
+- Keep paragraphs short (2-3 sentences max)
+
+CRITICAL COMPLETION RULE:
+- ALWAYS finish every sentence completely
+- NEVER end mid-word or mid-phrase (e.g., 'prior to and' is FORBIDDEN)
+- If you reach output limit, end with the LAST complete sentence
+- Better to omit a section than leave incomplete text
+
+CRITICAL RULE: DO NOT invent breaking news. Avoid 'MISSING' messaging; provide safe, general guidance when data is limited."
+    }
+
+    // 8. Cultural Wisdom - always provide timeless guidance
+    llm geniusLoci {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Cultural Wisdom for ${extractCity_output}.
+User trip: ${input}
+
+If destination is missing/unknown: briefly ask for the city, then provide generic cultural travel etiquette that is safe and widely applicable (greetings, modest dress at religious sites, tipping norms vary, public transport etiquette).
+
+If destination is known, provide timeless, well-established cultural guidance:
+1. Behavior: Dress codes, etiquette (at religious sites, on public transport, etc.)
+2. Connection: A verified historical fact about ${extractCity_output}
+3. Local Secret: A known local custom or hidden spot (not invented)
+
+CRITICAL RULE: Do NOT invent specific local customs if unknown; fall back to generic safe etiquette rather than 'MISSING'."
+    }
+
+    // 9. Final Report - compile missing data list + what's available
+    llm generateReport {
+      model: "gemini-2.0-flash"
+      prompt: "CURRENT DATE/TIME: ${getDate_output}
+
+Trip Guardian Report for ${extractCity_output}.
+User input: ${input}
+Extracted details: ${extractDetails_output}
+
+Data sources:
+- Logistics: ${knowledgeCheck_output}
+- Reviews: ${reviewSummarizer_output}
+- Safety: ${newsAlert_output}
+- Culture: ${geniusLoci_output}
+- Weather: ${checkWeather_output}
+
+STRUCTURE YOUR OUTPUT EXACTLY AS FOLLOWS (use these exact section headers):
+
+═══════════════════════════════════════════
+SECTION 1: WEATHER BRIEFING
+═══════════════════════════════════════════
+[If weather data exists from ${checkWeather_output}:]
+**Current Conditions:** [state exactly what the tool returned]
+**Impact:** [explain how this affects the trip in 1-2 complete sentences]
+**Preparation:** [what to pack/prepare - use bullet list if multiple items]
+
+[If weather data is missing:]
+Provide a concise general weather/planning note (e.g., 'Check a local forecast closer to travel; pack for variable conditions and rain layers as needed.'). Avoid 'MISSING' wording.
+
+FORMATTING RULES FOR THIS SECTION:
+- Use bullet points for lists (- item)
+- Keep each paragraph to 2-3 complete sentences maximum
+- NEVER end mid-sentence
+- If reaching output limit, end with last complete sentence
+
+═══════════════════════════════════════════
+SECTION 2: SAFETY BRIEFING
+═══════════════════════════════════════════
+[From ${newsAlert_output}, include ONLY:]
+- Common risks (pickpocketing, scams, etc.)
+- Emergency numbers
+- Transport safety tips
+
+FORMATTING RULES FOR THIS SECTION:
+- Use bullet points for lists
+- Use bold for risk names
+- Keep descriptions to 1-2 complete sentences
+- NEVER use pipe tables
+- ALWAYS complete every sentence - no mid-sentence cutoffs
+- If text looks incomplete, mark as INCOMPLETE
+
+DO NOT invent current events or breaking news.
+
+═══════════════════════════════════════════
+SECTION 3: CULTURAL GUIDANCE
+═══════════════════════════════════════════
+[From ${geniusLoci_output}, include:]
+1. Dress codes and etiquette
+2. Historical fact
+3. Local secret/custom
+
+═══════════════════════════════════════════
+SECTION 4: LOGISTICS & TIMING ADVICE
+═══════════════════════════════════════════
+[From ${knowledgeCheck_output}:]
+[Provide any available logistics advice, timing warnings, or general tips]
+[If no specific logistics data available, provide general city-level advice]
+
+═══════════════════════════════════════════
+
+CRITICAL RULES:
+- Use these exact section headers with the ═══ delimiters
+- Keep sections clearly separated
+- Do NOT mix content from different sections
+- If a section lacks specific data, provide concise, safe general guidance instead of 'No data available'
+- Do NOT use complex markdown tables (use simple bullet lists instead)"
+    }
+  }
+
+  edges {
+    START -> getDate
+
+    // getDate provides temporal context to all LLM nodes
+    getDate -> extractDetails
+    getDate -> extractCity
+    getDate -> knowledgeCheck
+    getDate -> reviewSummarizer
+    getDate -> newsAlert
+    getDate -> geniusLoci
+    getDate -> generateReport
+
+    extractCity -> checkWeather
+    extractCity -> knowledgeCheck
+    extractCity -> fetchReviews
+    extractCity -> newsAlert
+    extractCity -> geniusLoci
+
+    extractDetails -> knowledgeCheck
+
+    fetchReviews -> reviewSummarizer
+
+    checkWeather -> generateReport
+    knowledgeCheck -> generateReport
+    reviewSummarizer -> generateReport
+    newsAlert -> generateReport
+    geniusLoci -> generateReport
+
+    generateReport -> END
+  }
+}

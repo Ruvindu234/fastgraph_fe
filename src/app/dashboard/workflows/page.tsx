@@ -21,6 +21,7 @@ import { processAgentsFromResponse } from '@/services/workflows/agentProcessor';
 import { generateCustomAgentMockData, generateCustomAgentId } from '@/lib/customAgentMockData';
 import { AgentFormData } from '@/components/workflows/NewAgentPopup';
 import { useAuditLog } from '@/hooks/useAuditLog';
+import type { AgentTemplate, ParsedWorkflow } from '@/agents/types';
 
 // Generate a proper UUID v4
 function generateUUID(): string {
@@ -883,6 +884,93 @@ export default function WorkflowsPage() {
     console.log('✅ Agent creation flow completed via NewAgentPopup - agent will appear after mock data refresh');
   }, []);
 
+  // Handle template selection from sidebar
+  const handleTemplateSelect = useCallback((template: AgentTemplate, parsedWorkflow: ParsedWorkflow) => {
+    console.log('📦 Template selected:', template.name);
+    console.log('📊 Parsed workflow:', {
+      name: parsedWorkflow.name,
+      agentCount: Object.keys(parsedWorkflow.agents).length,
+      connectionCount: parsedWorkflow.connections.length
+    });
+
+    // Clear existing state (single tab mode)
+    setActiveWorkflow(null);
+    setAgents(null);
+    setConnections(null);
+    setFinalData(null);
+    setFinalizedResult(null);
+    setFinalizedArtifactLinks([]);
+    setCachedExecutionResults(null);
+    if (resetAutoOrchestrate) {
+      resetAutoOrchestrate();
+    }
+    dispatch(removeAllWorkflows());
+
+    // Generate a new workflow ID for this template instance
+    const workflowId = generateUUID();
+    console.log('🆔 Generated workflow ID for template:', workflowId);
+
+    // Create workflow from template
+    const workflowData = {
+      id: workflowId,
+      name: `${parsedWorkflow.name} - ${new Date().toLocaleTimeString()}`,
+      description: parsedWorkflow.description || template.description,
+      status: 'draft' as const,
+      lastModified: 'Just now',
+      nodes: Object.entries(parsedWorkflow.agents).map(([agentId, agent], index) => ({
+        id: `agent-${agentId}`,
+        data: {
+          label: agent.name,
+          role: agent.role,
+          capabilities: agent.capabilities,
+          inputs: agent.inputs,
+          outputs: agent.outputs,
+          nodeType: agent.nodeType,
+          config: agent.config
+        }
+      })),
+      connections: parsedWorkflow.connections
+    };
+
+    // Convert parsed agents to canvas format
+    const templateAgents: Record<string, any> = {};
+    Object.entries(parsedWorkflow.agents).forEach(([agentId, agent]) => {
+      templateAgents[agentId] = {
+        id: agentId,
+        name: agent.name,
+        role: agent.role,
+        capabilities: agent.capabilities,
+        inputs: agent.inputs,
+        outputs: agent.outputs,
+        logs: [],
+        isCustom: false,
+        nodeType: agent.nodeType,
+        config: agent.config,
+        workflowId: workflowId,
+        isTemplate: true // Flag to identify template agents
+      };
+    });
+
+    // Set the workflow and agents
+    dispatch(setWorkflows([workflowData]));
+    setActiveWorkflow(workflowId);
+    setAgents(templateAgents);
+    setConnections(parsedWorkflow.connections);
+
+    // Add to undo stack
+    addToUndoStack({
+      type: 'LOAD_TEMPLATE',
+      description: `Loaded template "${template.name}"`,
+      data: { workflowId, templateId: template.id }
+    });
+
+    console.log('✅ Template loaded successfully:', {
+      workflowId,
+      agentCount: Object.keys(templateAgents).length,
+      connectionCount: parsedWorkflow.connections.length
+    });
+  }, [dispatch, setActiveWorkflow, resetAutoOrchestrate, addToUndoStack]);
+
   return (
     <div className="h-screen theme-bg flex flex-col transition-colors duration-300">
       
@@ -950,6 +1038,7 @@ export default function WorkflowsPage() {
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={handleSidebarToggle}
             userId={currentUser?.id || currentUser?.userId || "1"} // Get user ID from auth slice
+            onTemplateSelect={handleTemplateSelect}
           />
         )}
         

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { FileText, Play, Pause, Clock, CheckCircle, ChevronLeft, ChevronRight, Search, X, Loader2, Trash2 } from 'lucide-react';
+import { FileText, Play, Pause, Clock, CheckCircle, ChevronLeft, ChevronRight, Search, X, Loader2, Trash2, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Workflow } from '@/types/workflow';
 import { useGetDataCreatedByQuery, useDeleteDataMutation, useGetMockAgentDataQuery } from '../../../redux/api/autoOrchestrate/autoOrchestrateApi';
 import toast from 'react-hot-toast';
+import { useTemplates } from '@/hooks/workflows/useTemplates';
+import type { AgentTemplate, ParsedWorkflow } from '@/agents/types';
 
 interface WorkflowsSidebarProps {
   isMobile?: boolean;
@@ -13,6 +15,7 @@ interface WorkflowsSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   userId?: string; // Add userId prop
+  onTemplateSelect?: (template: AgentTemplate, parsedWorkflow: ParsedWorkflow) => void; // New prop for template selection
 }
 
 // API Response type for getDataCreatedBy
@@ -63,10 +66,16 @@ const formatDate = (dateString: string): string => {
   return `${Math.floor(diffInMinutes / 1440)} days ago`;
 };
 
-export function WorkflowsSidebar({ isMobile = false, onWorkflowSelect, currentWorkflowId, isCollapsed = false, onToggleCollapse, userId = '1' }: WorkflowsSidebarProps) {
+export function WorkflowsSidebar({ isMobile = false, onWorkflowSelect, currentWorkflowId, isCollapsed = false, onToggleCollapse, userId = '1', onTemplateSelect }: WorkflowsSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingWorkflow, setDeletingWorkflow] = useState<string | null>(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [templatesExpanded, setTemplatesExpanded] = useState(true);
+  const [workflowsExpanded, setWorkflowsExpanded] = useState(true);
+  const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  
+  // Use the templates hook
+  const { templates, loadTemplate, error: templateError } = useTemplates();
   
   // Use the API to fetch workflows - only if userId is provided
   const { 
@@ -200,6 +209,54 @@ export function WorkflowsSidebar({ isMobile = false, onWorkflowSelect, currentWo
   const handleClearSearch = () => {
     setSearchQuery('');
   };
+
+  // Handle template click
+  const handleTemplateClick = (template: AgentTemplate) => {
+    console.log('📦 Template clicked:', template.id);
+    setLoadingTemplateId(template.id);
+    
+    try {
+      const parsedWorkflow = loadTemplate(template.id);
+      
+      if (parsedWorkflow && onTemplateSelect) {
+        console.log('✅ Template loaded successfully:', {
+          name: parsedWorkflow.name,
+          agentCount: Object.keys(parsedWorkflow.agents).length,
+          connectionCount: parsedWorkflow.connections.length
+        });
+        onTemplateSelect(template, parsedWorkflow);
+        toast.success(`Template "${template.name}" loaded!`, {
+          duration: 2000,
+          icon: '📦',
+        });
+      } else if (templateError) {
+        toast.error(`Failed to load template: ${templateError}`, {
+          duration: 3000,
+          icon: '❌',
+        });
+      }
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast.error('Failed to load template', {
+        duration: 3000,
+        icon: '❌',
+      });
+    } finally {
+      setLoadingTemplateId(null);
+    }
+  };
+
+  // Filter templates based on search query
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return templates;
+    
+    const query = searchQuery.toLowerCase();
+    return templates.filter(template => 
+      template.name.toLowerCase().includes(query) ||
+      template.description.toLowerCase().includes(query) ||
+      template.category.toLowerCase().includes(query)
+    );
+  }, [searchQuery, templates]);
 
   const handleDeleteWorkflow = async (workflowId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent workflow selection when clicking delete
@@ -363,7 +420,86 @@ export function WorkflowsSidebar({ isMobile = false, onWorkflowSelect, currentWo
           </div>
         )}
         
-        <div className="space-y-2">
+        {/* Templates Section */}
+        {!isCollapsed && filteredTemplates.length > 0 && (
+          <div className="mb-4">
+            <button
+              onClick={() => setTemplatesExpanded(!templatesExpanded)}
+              className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold theme-text-muted hover:theme-text-secondary transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Package className="w-3.5 h-3.5" />
+                TEMPLATES
+              </span>
+              {templatesExpanded ? (
+                <ChevronUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
+            </button>
+            
+            {templatesExpanded && (
+              <div className="mt-2 space-y-2">
+                {filteredTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="p-3 rounded-lg cursor-pointer group transition-all duration-200 theme-hover-bg hover:theme-shadow-sm border border-dashed theme-border hover:border-purple-400 dark:hover:border-purple-500"
+                    onClick={() => handleTemplateClick(template)}
+                    title={`Load ${template.name} template`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/30">
+                        <span className="text-lg">{template.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="text-sm theme-text-primary font-medium truncate max-w-[140px]" title={template.name}>
+                            {template.name}
+                          </span>
+                          {loadingTemplateId === template.id && (
+                            <Loader2 className="w-3 h-3 animate-spin text-purple-500" />
+                          )}
+                        </div>
+                        <p className="text-xs theme-text-muted mb-2 line-clamp-2">
+                          {template.description}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400 font-medium">
+                            {template.category}
+                          </span>
+                          <span className="text-xs theme-text-muted">
+                            v{template.version}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Your Workflows Section Header */}
+        {!isCollapsed && (
+          <button
+            onClick={() => setWorkflowsExpanded(!workflowsExpanded)}
+            className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold theme-text-muted hover:theme-text-secondary transition-colors mb-2"
+          >
+            <span className="flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5" />
+              YOUR WORKFLOWS
+            </span>
+            {workflowsExpanded ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
+          </button>
+        )}
+
+        {/* Workflows List */}
+        <div className={`space-y-2 ${!isCollapsed && !workflowsExpanded ? 'hidden' : ''}`}>
           {!userId || userId === '1' ? (
             // No user authenticated
             <div className="text-center py-8">
