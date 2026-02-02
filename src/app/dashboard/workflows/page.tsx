@@ -22,7 +22,7 @@ import { generateCustomAgentMockData, generateCustomAgentId } from '@/lib/custom
 import { AgentFormData } from '@/components/workflows/NewAgentPopup';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import type { AgentTemplate, ParsedWorkflow } from '@/agents/types';
-import { calculateTripGuardianLayout, calculateDAGLayoutAsync } from '@/agents';
+import { calculateDAGLayoutAsync } from '@/agents';
 
 // Generate a proper UUID v4
 function generateUUID(): string {
@@ -918,35 +918,28 @@ export default function WorkflowsPage() {
       target: conn.target.replace('agent-', '')
     }));
     
-    // Use optimized manual layout for TripGuardianV3, ELK for others
+    // Use ELK for all templates including TripGuardianV3
     let positions: Record<string, { x: number; y: number }>;
-    if (template.id === 'trip-guardian-v3') {
-      // Use hand-crafted layout optimized to minimize edge crossings
-      positions = calculateTripGuardianLayout();
-      console.log('📐 Using optimized TripGuardian layout:', positions);
-    } else {
-      // Use ELK for other templates (async)
-      try {
-        const layoutResult = await calculateDAGLayoutAsync(nodeIds, edgesForLayout, {
-          nodeWidth: 140,
-          nodeHeight: 50,
-          rankSeparation: 180,
-          nodeSeparation: 120,
-          direction: 'DOWN'
-        });
-        positions = layoutResult.positions;
-        console.log('📐 ELK calculated layout:', { positions, levels: layoutResult.levels });
-      } catch (error) {
-        console.error('ELK layout failed, using fallback:', error);
-        // Fallback to simple grid
-        positions = {};
-        nodeIds.forEach((id, index) => {
-          positions[id] = {
-            x: 100 + (index % 3) * 200,
-            y: 100 + Math.floor(index / 3) * 150
-          };
-        });
-      }
+    try {
+      const layoutResult = await calculateDAGLayoutAsync(nodeIds, edgesForLayout, {
+        nodeWidth: 140,
+        nodeHeight: 50,
+        rankSeparation: 180,
+        nodeSeparation: 120,
+        direction: 'DOWN'
+      });
+      positions = layoutResult.positions;
+      console.log('📐 ELK calculated layout:', { positions, levels: layoutResult.levels });
+    } catch (error) {
+      console.error('ELK layout failed, using fallback:', error);
+      // Fallback to simple grid
+      positions = {};
+      nodeIds.forEach((id, index) => {
+        positions[id] = {
+          x: 100 + (index % 3) * 200,
+          y: 100 + Math.floor(index / 3) * 150
+        };
+      });
     }
 
     // Create workflow from template with proper positions
