@@ -129,31 +129,95 @@ function parseNodesSection(content: string): MLanguageNode[] {
 
   const nodesContent = nodesBlockMatch[1];
 
-  // Match individual node definitions: type name { ... }
-  // Pattern: node_type node_name { config }
-  const nodePatterns = [
-    { type: 'llm' as const, regex: /llm\s+(\w+)\s*\{([\s\S]*?)\n\s*\}/g },
-    { type: 'http_request' as const, regex: /http_request\s+(\w+)\s*\{([\s\S]*?)\n\s*\}/g }
+  // Node types to search for
+  const nodeTypes: Array<{ type: 'llm' | 'http_request'; keyword: string }> = [
+    { type: 'llm', keyword: 'llm' },
+    { type: 'http_request', keyword: 'http_request' }
   ];
 
-  for (const pattern of nodePatterns) {
-    let match;
-    while ((match = pattern.regex.exec(nodesContent)) !== null) {
-      const nodeName = match[1];
-      const nodeContent = match[2];
-
-      const node: MLanguageNode = {
-        id: nodeName,
-        type: pattern.type,
-        name: nodeName,
-        config: parseNodeConfig(nodeContent, pattern.type)
-      };
-
-      nodes.push(node);
+  for (const nodeType of nodeTypes) {
+    // Find all occurrences of this node type
+    const nodeStartRegex = new RegExp(`${nodeType.keyword}\\s+(\\w+)\\s*\\{`, 'g');
+    let startMatch;
+    
+    while ((startMatch = nodeStartRegex.exec(nodesContent)) !== null) {
+      const nodeName = startMatch[1];
+      const startIndex = startMatch.index + startMatch[0].length;
+      
+      // Use brace counting to find the matching closing brace
+      const nodeContent = extractBalancedBraces(nodesContent, startIndex);
+      
+      if (nodeContent !== null) {
+        const node: MLanguageNode = {
+          id: nodeName,
+          type: nodeType.type,
+          name: nodeName,
+          config: parseNodeConfig(nodeContent, nodeType.type)
+        };
+        nodes.push(node);
+      }
     }
   }
 
   return nodes;
+}
+
+/**
+ * Extract content between balanced braces using brace counting
+ * @param content The full content string
+ * @param startIndex Index right after the opening brace
+ * @returns The content between the braces, or null if unbalanced
+ */
+function extractBalancedBraces(content: string, startIndex: number): string | null {
+  let braceCount = 1; // We're starting right after an opening brace
+  let i = startIndex;
+  
+  while (i < content.length && braceCount > 0) {
+    const char = content[i];
+    
+    // Skip string literals to avoid counting braces inside strings
+    if (char === '"') {
+      i++;
+      // Check for triple quotes (multi-line strings)
+      if (content.substring(i, i + 2) === '""') {
+        i += 2; // Skip past the other two quotes
+        // Find closing triple quotes
+        const closeTriple = content.indexOf('"""', i);
+        if (closeTriple === -1) {
+          return null; // Unbalanced triple quotes
+        }
+        i = closeTriple + 3;
+        continue;
+      }
+      // Regular double-quoted string
+      while (i < content.length) {
+        if (content[i] === '\\') {
+          i += 2; // Skip escaped character
+        } else if (content[i] === '"') {
+          i++;
+          break;
+        } else {
+          i++;
+        }
+      }
+      continue;
+    }
+    
+    if (char === '{') {
+      braceCount++;
+    } else if (char === '}') {
+      braceCount--;
+    }
+    
+    i++;
+  }
+  
+  if (braceCount !== 0) {
+    return null; // Unbalanced braces
+  }
+  
+  // Return content without the final closing brace
+  return content.substring(startIndex, i - 1);
 }
 
 /**

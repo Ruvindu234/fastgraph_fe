@@ -37,28 +37,28 @@ export function CustomUserAgentNode({ data, selected, id }: CustomUserAgentNodeP
           : '0 0 0 1px rgba(139, 92, 246, 0.3)',
       }}
     >
-      {/* Connection Handles */}
+      {/* Connection Handles - TOP/BOTTOM for hierarchical DAG layout */}
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Top}
         style={{
           background: '#8b5cf6',
-          width: 7,
-          height: 7,
-          border: '1.5px solid white',
-          left: -3.5,
+          width: 8,
+          height: 8,
+          border: '2px solid white',
+          top: -4,
           boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)'
         }}
       />
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Bottom}
         style={{
           background: '#8b5cf6',
-          width: 7,
-          height: 7,
-          border: '1.5px solid white',
-          right: -3.5,
+          width: 8,
+          height: 8,
+          border: '2px solid white',
+          bottom: -4,
           boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)'
         }}
       />

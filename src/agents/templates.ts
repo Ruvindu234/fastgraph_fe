@@ -168,24 +168,24 @@ Use data from: \${knowledgeCheck_output}, \${reviewSummarizer_output}, \${newsAl
   edges {
     START -> getDate
 
+    // Primary data flow only (removed context injection edges for cleaner visualization)
     getDate -> extractDetails
     getDate -> extractCity
-    getDate -> knowledgeCheck
-    getDate -> reviewSummarizer
-    getDate -> newsAlert
-    getDate -> geniusLoci
-    getDate -> generateReport
 
+    // extractDetails provides trip details to knowledgeCheck
+    extractDetails -> knowledgeCheck
+
+    // extractCity provides city name to data fetching nodes
     extractCity -> checkWeather
-    extractCity -> knowledgeCheck
     extractCity -> fetchReviews
+    extractCity -> knowledgeCheck
     extractCity -> newsAlert
     extractCity -> geniusLoci
 
-    extractDetails -> knowledgeCheck
-
+    // fetchReviews provides data to reviewSummarizer
     fetchReviews -> reviewSummarizer
 
+    // All analysis results flow to generateReport
     checkWeather -> generateReport
     knowledgeCheck -> generateReport
     reviewSummarizer -> generateReport

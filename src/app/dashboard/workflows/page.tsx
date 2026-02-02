@@ -22,6 +22,7 @@ import { generateCustomAgentMockData, generateCustomAgentId } from '@/lib/custom
 import { AgentFormData } from '@/components/workflows/NewAgentPopup';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import type { AgentTemplate, ParsedWorkflow } from '@/agents/types';
+import { calculateTripGuardianLayout, calculateDAGLayoutAsync } from '@/agents';
 
 // Generate a proper UUID v4
 function generateUUID(): string {
@@ -885,7 +886,7 @@ export default function WorkflowsPage() {
   }, []);
 
   // Handle template selection from sidebar
-  const handleTemplateSelect = useCallback((template: AgentTemplate, parsedWorkflow: ParsedWorkflow) => {
+  const handleTemplateSelect = useCallback(async (template: AgentTemplate, parsedWorkflow: ParsedWorkflow) => {
     console.log('📦 Template selected:', template.name);
     console.log('📊 Parsed workflow:', {
       name: parsedWorkflow.name,
@@ -910,7 +911,45 @@ export default function WorkflowsPage() {
     const workflowId = generateUUID();
     console.log('🆔 Generated workflow ID for template:', workflowId);
 
-    // Create workflow from template
+    // Calculate hierarchical layout positions
+    const nodeIds = Object.keys(parsedWorkflow.agents);
+    const edgesForLayout = parsedWorkflow.connections.map(conn => ({
+      source: conn.source.replace('agent-', ''),
+      target: conn.target.replace('agent-', '')
+    }));
+    
+    // Use optimized manual layout for TripGuardianV3, ELK for others
+    let positions: Record<string, { x: number; y: number }>;
+    if (template.id === 'trip-guardian-v3') {
+      // Use hand-crafted layout optimized to minimize edge crossings
+      positions = calculateTripGuardianLayout();
+      console.log('📐 Using optimized TripGuardian layout:', positions);
+    } else {
+      // Use ELK for other templates (async)
+      try {
+        const layoutResult = await calculateDAGLayoutAsync(nodeIds, edgesForLayout, {
+          nodeWidth: 140,
+          nodeHeight: 50,
+          rankSeparation: 180,
+          nodeSeparation: 120,
+          direction: 'DOWN'
+        });
+        positions = layoutResult.positions;
+        console.log('📐 ELK calculated layout:', { positions, levels: layoutResult.levels });
+      } catch (error) {
+        console.error('ELK layout failed, using fallback:', error);
+        // Fallback to simple grid
+        positions = {};
+        nodeIds.forEach((id, index) => {
+          positions[id] = {
+            x: 100 + (index % 3) * 200,
+            y: 100 + Math.floor(index / 3) * 150
+          };
+        });
+      }
+    }
+
+    // Create workflow from template with proper positions
     const workflowData = {
       id: workflowId,
       name: `${parsedWorkflow.name} - ${new Date().toLocaleTimeString()}`,
@@ -919,6 +958,7 @@ export default function WorkflowsPage() {
       lastModified: 'Just now',
       nodes: Object.entries(parsedWorkflow.agents).map(([agentId, agent], index) => ({
         id: `agent-${agentId}`,
+        position: positions[agentId] || { x: 100 + (index % 3) * 180, y: 150 + Math.floor(index / 3) * 100 },
         data: {
           label: agent.name,
           role: agent.role,
@@ -932,9 +972,10 @@ export default function WorkflowsPage() {
       connections: parsedWorkflow.connections
     };
 
-    // Convert parsed agents to canvas format
+    // Convert parsed agents to canvas format WITH positions
     const templateAgents: Record<string, any> = {};
-    Object.entries(parsedWorkflow.agents).forEach(([agentId, agent]) => {
+    Object.entries(parsedWorkflow.agents).forEach(([agentId, agent], index) => {
+      const pos = positions[agentId] || { x: 100 + (index % 3) * 180, y: 150 + Math.floor(index / 3) * 100 };
       templateAgents[agentId] = {
         id: agentId,
         name: agent.name,
@@ -947,7 +988,8 @@ export default function WorkflowsPage() {
         nodeType: agent.nodeType,
         config: agent.config,
         workflowId: workflowId,
-        isTemplate: true // Flag to identify template agents
+        isTemplate: true, // Flag to identify template agents
+        position: pos // Include position for canvas layout
       };
     });
 
@@ -967,7 +1009,8 @@ export default function WorkflowsPage() {
     console.log('✅ Template loaded successfully:', {
       workflowId,
       agentCount: Object.keys(templateAgents).length,
-      connectionCount: parsedWorkflow.connections.length
+      connectionCount: parsedWorkflow.connections.length,
+      positions
     });
   }, [dispatch, setActiveWorkflow, resetAutoOrchestrate, addToUndoStack]);
 

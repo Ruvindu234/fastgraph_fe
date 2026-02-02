@@ -28,6 +28,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 // Smaller React Flow node component with proper handles
+// Uses TOP/BOTTOM handles for hierarchical DAG layout (top-to-bottom flow)
 const CustomAgentNode = ({ data, selected, id }: { data: any; selected?: boolean; id: string }) => {
   return (
     <div 
@@ -43,29 +44,29 @@ const CustomAgentNode = ({ data, selected, id }: { data: any; selected?: boolean
         fontSize: '9px'
       }}
     >
-      {/* React Flow Handles - Essential for connections */}
+      {/* Target handle at TOP - for incoming connections from parent nodes */}
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Top}
         style={{
           background: '#6366f1',
-          width: 6,
-          height: 6,
-          border: '1px solid white',
-          left: -3
+          width: 8,
+          height: 8,
+          border: '2px solid white',
+          top: -4
         }}
       />
-      {/* End nodes only need target handle, regular agents need both */}
+      {/* Source handle at BOTTOM - for outgoing connections to child nodes */}
       {data.role !== 'End' && (
         <Handle
           type="source"
-          position={Position.Right}
+          position={Position.Bottom}
           style={{
             background: '#10b981',
-            width: 6,
-            height: 6,
-            border: '1px solid white',
-            right: -3
+            width: 8,
+            height: 8,
+            border: '2px solid white',
+            bottom: -4
           }}
         />
       )}
@@ -153,9 +154,10 @@ function WorkflowCanvasInner({
       const customAgents = Object.entries(agents).filter(([_, agent]) => agent.isCustom);
       
       // Position regular agents in the main flow
+      // Use agent.position if provided (from templates), otherwise calculate grid position
       const regularAgentNodes: Node[] = regularAgents.map(([name, agent], index) => ({
         id: `agent-${name}`,
-        position: { 
+        position: agent.position || { 
           x: 100 + (index % 3) * 180, // Adjusted spacing for smaller nodes
           y: 150 + Math.floor(index / 3) * 100 
         },
@@ -163,7 +165,8 @@ function WorkflowCanvasInner({
           label: agent.name || name,
           role: agent.role,
           capabilities: agent.capabilities || [],
-          isCustom: false
+          isCustom: false,
+          nodeType: agent.nodeType // Preserve node type for styling
         },
         type: 'agent',
         style: {
@@ -194,12 +197,37 @@ function WorkflowCanvasInner({
       
       const agentNodes: Node[] = [...regularAgentNodes, ...customAgentNodes];
       
-      // Add end node
+      // Calculate End node position based on actual agent positions
+      // Find the node with maximum Y (bottom-most) and center X
+      let maxY = 0;
+      let centerX = 350; // Default center
+      let bottomNodeX = 350;
+      
+      agentNodes.forEach(node => {
+        if (node.position.y > maxY) {
+          maxY = node.position.y;
+          bottomNodeX = node.position.x;
+        }
+      });
+      
+      // Also try to find generateReport specifically for templates
+      const generateReportNode = agentNodes.find(n => 
+        n.id === 'agent-generateReport' || n.data?.label === 'generateReport'
+      );
+      if (generateReportNode) {
+        centerX = generateReportNode.position.x + 25; // Center below generateReport (adjust for node width)
+        maxY = generateReportNode.position.y;
+      } else {
+        // Fallback: use the bottom-most node's X position
+        centerX = bottomNodeX + 25;
+      }
+      
+      // Add end node - positioned below the bottom-most agent, centered
       const endNode: Node = {
         id: 'end-node',
         position: {
-          x: 100 + (Object.keys(agents).length % 3) * 180,
-          y: 150 + Math.floor(Object.keys(agents).length / 3) * 100 + 100 // Position below last agent
+          x: centerX,
+          y: maxY + 140 // Position 140px below the bottom-most agent
         },
         data: {
           label: 'End',
