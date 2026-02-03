@@ -42,21 +42,43 @@ export async function calculateDAGLayoutAsync(
     direction = 'DOWN'
   } = options;
 
-  // Build ELK graph structure
+  // Build ELK graph structure with aggressive crossing minimization
   const graph: ElkNode = {
     id: 'root',
     layoutOptions: {
+      // Core algorithm
       'elk.algorithm': 'layered',
       'elk.direction': direction,
+      
+      // Spacing
       'elk.spacing.nodeNode': String(nodeSeparation),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(rankSeparation),
-      'elk.edgeRouting': 'ORTHOGONAL',  // Clean right-angle edges
+      'elk.spacing.edgeNode': '60',
+      'elk.spacing.edgeEdge': '40',
+      'elk.padding': '[top=50,left=100,bottom=50,right=100]',
+      
+      // Edge routing - use SPLINES for smoother non-crossing edges
+      'elk.edgeRouting': 'SPLINES',
+      'elk.layered.edgeRouting.splines.mode': 'CONSERVATIVE',
+      
+      // Aggressive crossing minimization
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-      'elk.spacing.edgeNode': '50',
-      'elk.spacing.edgeEdge': '30',
-      'elk.padding': '[top=50,left=100,bottom=50,right=100]'
+      'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+      'elk.layered.crossingMinimization.semiInteractive': 'false',
+      'elk.layered.thoroughness': '100',  // Max thoroughness for crossing minimization
+      
+      // Node placement optimization
+      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+      
+      // Consider order for better results
+      'elk.layered.considerModelOrder.strategy': 'PREFER_EDGES',
+      'elk.layered.mergeEdges': 'true',
+      'elk.layered.mergeHierarchyEdges': 'true',
+      
+      // Optimize long edges
+      'elk.layered.wrapping.strategy': 'OFF',
+      'elk.layered.unnecessaryBendpoints': 'true'
     },
     children: nodeIds.map(id => ({
       id,
@@ -195,7 +217,14 @@ export async function calculateDAGLayoutWithEdgesAsync(
       'elk.direction': 'DOWN',
       'elk.spacing.nodeNode': String(nodeSeparation),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(rankSeparation),
-      'elk.edgeRouting': 'ORTHOGONAL'
+      'elk.spacing.edgeNode': '60',
+      'elk.spacing.edgeEdge': '40',
+      'elk.edgeRouting': 'SPLINES',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+      'elk.layered.thoroughness': '100',
+      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.mergeEdges': 'true'
     },
     children: nodeIds.map(id => ({
       id,
