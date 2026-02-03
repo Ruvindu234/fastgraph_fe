@@ -260,7 +260,7 @@ function WorkflowCanvasInner({
           id: `${agentName[0]}-to-end`,
           source: `agent-${agentName[0]}`,
           target: 'end-node',
-          type: 'smoothstep',
+          type: 'bezier',
           animated: true,
           style: {
             stroke: '#ff6b6b',
@@ -285,7 +285,7 @@ function WorkflowCanvasInner({
               id: `custom-${customName}-to-${firstRegularName}`,
               source: `agent-${customName}`,
               target: `agent-${firstRegularName}`,
-              type: 'smoothstep',
+              type: 'bezier',
               animated: true,
               style: {
                 stroke: '#8b5cf6', // Purple for custom connections
@@ -322,7 +322,7 @@ function WorkflowCanvasInner({
                       id: connectionId,
                       source: `agent-${sourceName}`,
                       target: `agent-${targetName}`,
-                      type: 'smoothstep',
+                      type: 'bezier',
                       animated: true,
                       style: {
                         stroke: '#6366f1',
@@ -354,7 +354,7 @@ function WorkflowCanvasInner({
               id: `seq-${sourceName}-to-${targetName}`,
               source: `agent-${sourceName}`,
               target: `agent-${targetName}`,
-              type: 'smoothstep',
+              type: 'bezier',
               animated: true,
               style: {
                 stroke: '#6366f1',
@@ -396,7 +396,7 @@ function WorkflowCanvasInner({
             id: `${agentName}-to-end`,
             source: `agent-${agentName}`,
             target: 'end-node',
-            type: 'smoothstep',
+            type: 'bezier',
             animated: true,
             style: {
               stroke: '#ff6b6b',
@@ -424,7 +424,7 @@ function WorkflowCanvasInner({
             id: `test-${firstName}-to-${secondName}`,
             source: `agent-${firstName}`,
             target: `agent-${secondName}`,
-            type: 'smoothstep',
+            type: 'bezier',
             animated: true,
             style: {
               stroke: '#ef4444',
@@ -443,7 +443,7 @@ function WorkflowCanvasInner({
             id: `${secondName}-to-end`,
             source: `agent-${secondName}`,
             target: 'end-node',
-            type: 'smoothstep',
+            type: 'bezier',
             animated: true,
             style: {
               stroke: '#ff6b6b',
@@ -469,7 +469,7 @@ function WorkflowCanvasInner({
         id: connection.id || `edge-${index}`,
         source: connection.source,
         target: connection.target,
-        type: 'smoothstep', // Force smoothstep type
+        type: 'bezier', // Smooth curved edges
         animated: true,
         style: {
           stroke: '#6366f1',
@@ -495,7 +495,7 @@ function WorkflowCanvasInner({
             id: `custom-${customName}-to-${firstRegularName}`,
             source: `agent-${customName}`,
             target: `agent-${firstRegularName}`,
-            type: 'smoothstep',
+            type: 'bezier',
             animated: true,
             style: {
               stroke: '#8b5cf6',
@@ -532,7 +532,7 @@ function WorkflowCanvasInner({
             id: `${agentName}-to-end`,
             source: `agent-${agentName}`,
             target: 'end-node',
-            type: 'smoothstep',
+            type: 'bezier',
             animated: true,
             style: {
               stroke: '#ff6b6b',
@@ -572,7 +572,7 @@ function WorkflowCanvasInner({
     (params: Connection) => {
       const newEdge = {
         ...params,
-        type: 'smoothstep',
+        type: 'bezier',
         animated: true,
         style: {
           stroke: '#6366f1',
