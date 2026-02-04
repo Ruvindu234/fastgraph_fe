@@ -133,7 +133,7 @@ export function CreateAgentModal({ isOpen, onClose, onSubmit }: CreateAgentModal
 
         {/* Agent Prompt */}
         <div>
-          <label className="block text-sm font-medium theme-text-primary mb-1.5 flex items-center gap-2">
+          <label className="block text-sm font-medium theme-text-primary mb-1.5 items-center gap-2">
             <span>Agent Prompt *</span>
             <Sparkles className="w-3.5 h-3.5 text-purple-500" />
           </label>
