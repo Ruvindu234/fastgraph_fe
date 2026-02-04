@@ -4,7 +4,7 @@ import { Plus, X, Undo2, Bot } from 'lucide-react';
 import { Workflow } from '@/types/workflow';
 import { StatusIndicator } from '@/components/ui/StatusIndicator';
 import { CreateWorkflowModal, WorkflowFormData } from '@/components/dashboard/CreateWorkflowModal';
-import { NewAgentPopup } from './NewAgentPopup';
+import { CreateAgentModal, AgentPromptFormData } from '@/components/workflows/CreateAgentModal';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -15,8 +15,8 @@ interface WorkflowTabsProps {
   onCloseWorkflow: (workflowId: string) => void;
   onCreateNew: () => void;
   onCreateWithModal?: (data: WorkflowFormData) => void;
-  onCreateCustomAgent?: (data: any) => void; // Handler for custom agent creation
-  onRefreshMockData?: () => Promise<void>; // Handler for refreshing mock agent data
+  onCreateCustomAgent?: (data: AgentPromptFormData) => void;
+  onRefreshMockData?: () => Promise<void>;
   onUndo?: () => void;
   canUndo?: boolean;
   maxWorkflows: number;
@@ -37,8 +37,9 @@ export function WorkflowTabs({
   maxWorkflows,
   userId
 }: WorkflowTabsProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAgentPopupOpen, setIsAgentPopupOpen] = useState(false);
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
+  const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
+  
   return (
     <div className="flex items-center px-4 pb-2">
       <div className="flex space-x-1 flex-1">
@@ -56,15 +57,6 @@ export function WorkflowTabs({
             <span className="text-sm font-medium truncate max-w-[200px]" title={workflow.name}>
               {workflow.name}
             </span>
-            {/* <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseWorkflow(workflow.id);
-              }}
-              className="theme-text-muted hover:text-red-500 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button> */}
           </div>
         ))}
       </div>
@@ -92,7 +84,7 @@ export function WorkflowTabs({
           <button
             onClick={() => {
               if (onCreateWithModal) {
-                setIsModalOpen(true);
+                setIsWorkflowModalOpen(true);
               } else {
                 onCreateNew();
               }
@@ -104,28 +96,13 @@ export function WorkflowTabs({
           </button>
         )}
 
-        {/* New Agent Button - Only active when there's an active workflow */}
+        {/* New Agent Button */}
         <button
-          onClick={() => {
-            if (activeWorkflow) {
-              setIsAgentPopupOpen(true);
-            } else {
-              // Show a helpful message when no workflow is selected
-              toast.error('Please select a workflow first to create agents', {
-                duration: 3000,
-                icon: '⚠️',
-              });
-            }
-          }}
-          disabled={!activeWorkflow}
-          className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${
-            activeWorkflow
-              ? 'theme-text-secondary hover:theme-text-primary theme-hover-bg'
-              : 'theme-text-muted cursor-not-allowed opacity-50'
-          }`}
-          title={activeWorkflow ? 'Create new agent' : 'Select a workflow first to create agents'}
+          onClick={() => setIsAgentModalOpen(true)}
+          className="flex items-center space-x-1 px-3 py-2 theme-text-secondary hover:theme-text-primary theme-hover-bg rounded-lg transition-colors"
+          title="Create new agent"
         >
-          <Bot className={`w-4 h-4 ${!activeWorkflow ? 'opacity-50' : ''}`} />
+          <Bot className="w-4 h-4" />
           <span className="text-sm">New Agent</span>
         </button>
       </div>
@@ -133,29 +110,31 @@ export function WorkflowTabs({
       {/* Create Workflow Modal */}
       {onCreateWithModal && (
         <CreateWorkflowModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          isOpen={isWorkflowModalOpen}
+          onClose={() => setIsWorkflowModalOpen(false)}
           onSubmit={(data: WorkflowFormData) => {
             onCreateWithModal(data);
-            setIsModalOpen(false);
+            setIsWorkflowModalOpen(false);
           }}
         />
       )}
 
-      {/* New Agent Popup */}
-      <NewAgentPopup
-        isOpen={isAgentPopupOpen}
-        onClose={() => setIsAgentPopupOpen(false)}
-        onSubmit={(data) => {
-          if (onCreateCustomAgent) {
+      {/* Create Agent Modal */}
+      {onCreateCustomAgent && (
+        <CreateAgentModal
+          isOpen={isAgentModalOpen}
+          onClose={() => setIsAgentModalOpen(false)}
+          onSubmit={async (data: AgentPromptFormData) => {
             onCreateCustomAgent(data);
-          }
-          setIsAgentPopupOpen(false);
-        }}
-        workflowId={activeWorkflow || undefined}
-        userId={userId}
-        onRefreshMockData={onRefreshMockData}
-      />
+            setIsAgentModalOpen(false);
+            
+            // Refresh mock data after agent creation
+            if (onRefreshMockData) {
+              await onRefreshMockData();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

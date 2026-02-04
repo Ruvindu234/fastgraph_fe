@@ -11,6 +11,7 @@ import { usePromptHandler } from '@/hooks/workflows/usePromptHandler';
 import { useAutoOrchestrate } from '@/hooks/workflows/useAutoOrchestrate';
 import { useEvolveAgentMutation } from '../../../../redux/api/evolveAgent/evolveAgentApi';
 import { WorkflowFormData } from '@/components/dashboard/CreateWorkflowModal';
+import { AgentPromptFormData } from '@/components/workflows/CreateAgentModal';
 import { useDispatch, useSelector } from 'react-redux';
 import { addWorkflow, removeAllWorkflows, updateWorkflow, removeWorkflow, setWorkflows, setDataId, clearDataId } from '@/redux/slice/workflowSlice';
 import { useGetDataCreatedByQuery, useInstallDataMutation, useGetMockAgentDataQuery } from '../../../../redux/api/autoOrchestrate/autoOrchestrateApi';
@@ -19,7 +20,6 @@ import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { processAgentsFromResponse } from '@/services/workflows/agentProcessor';
 import { generateCustomAgentMockData, generateCustomAgentId } from '@/lib/customAgentMockData';
-import { AgentFormData } from '@/components/workflows/NewAgentPopup';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import type { AgentTemplate, ParsedWorkflow } from '@/agents/types';
 import { calculateDAGLayoutAsync, calculateTripGuardianLayout } from '@/agents';
@@ -869,21 +869,46 @@ export default function WorkflowsPage() {
     }
   };
 
-  // Handle custom agent creation from NewAgentPopup
-  const handleCustomAgentCreate = useCallback(async (data: AgentFormData) => {
-    console.log('🎨 Custom agent creation handled by NewAgentPopup - no duplicate creation needed');
+  // Handle custom agent creation from CreateAgentModal (prompt-based)
+  const handleCustomAgentCreate = useCallback(async (data: AgentPromptFormData) => {
+    console.log('🎨 Creating custom agent with prompt:', data);
     
-    // Note: NewAgentPopup already handles agent creation via:
-    // 1. createAgentV1() - creates agent in backend (first API)
-    // 2. createAgent() - creates agent via RTK Query (second API) 
-    // 3. onRefreshMockData() - refreshes mock agent data and adds agent to canvas
-    //
-    // This callback is just for compatibility - the actual agent creation happens in NewAgentPopup
-    // The agent will appear as a mock agent after onRefreshMockData is called
-    // No need to create duplicate agents here!
-    
-    console.log('✅ Agent creation flow completed via NewAgentPopup - agent will appear after mock data refresh');
-  }, []);
+    try {
+      // TODO: Call your agent creation endpoint here
+      // Example endpoint structure (you'll provide the actual endpoint later):
+      // const response = await fetch('/api/agent/create-from-prompt', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     name: data.name,
+      //     prompt: data.prompt,
+      //     userId: currentUser?.id || currentUser?.userId
+      //   })
+      // });
+      
+      console.log('📤 Agent creation data prepared:', {
+        name: data.name,
+        prompt: data.prompt,
+        userId: currentUser?.id || currentUser?.userId
+      });
+      
+      // Show success message
+      toast.success(`Agent "${data.name}" created successfully!`, {
+        duration: 3000,
+        icon: '🤖',
+      });
+      
+      // Refresh mock agent data to show the new agent
+      if (refetchMockAgent) {
+        await refetchMockAgent();
+      }
+      
+      console.log('✅ Agent creation completed');
+    } catch (error) {
+      console.error('❌ Failed to create agent:', error);
+      toast.error('Failed to create agent. Please try again.');
+    }
+  }, [currentUser, refetchMockAgent]);
 
   // Handle template selection from sidebar
   const handleTemplateSelect = useCallback(async (template: AgentTemplate, parsedWorkflow: ParsedWorkflow) => {

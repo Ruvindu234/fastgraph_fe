@@ -4,7 +4,7 @@ import { Play, Square, Save, Trash2 } from 'lucide-react';
 interface WorkflowActionsProps {
   currentWorkflow: any;
   isRunning: boolean;
-  agentCount:number
+  agentCount: number;
   onExecute: () => void;
   onStop: () => void;
   onSave: () => void;
@@ -32,7 +32,9 @@ export function WorkflowActions({
 
   return (
     <div className="flex items-center space-x-2">
+      {/* Execute/Stop Button */}
       <Button {...getExecuteButtonProps()} />
+      
       {/* <Button 
         variant="primary" 
         icon={Save} 
